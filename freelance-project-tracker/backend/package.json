@@ -1,0 +1,55 @@
+{
+  "name": "freelance-tracker-backend",
+  "version": "1.0.0",
+  "description": "Backend API for freelance project tracker",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch server.js",
+    "start": "node server.js",
+    "test": "NODE_ENV=test jest --detectOpenHandles --forceExit",
+    "test:watch": "NODE_ENV=test jest --watch",
+    "seed": "node scripts/seed.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^7.5.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "socket.io": "^4.7.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.0.0",
+    "morgan": "^1.10.0",
+    "crypto-js": "^4.1.1",
+    "nodemailer": "^6.9.4",
+    "dotenv": "^16.3.1",
+    "joi": "^17.9.2"
+  },
+  "devDependencies": {
+    "jest": "^29.6.2",
+    "supertest": "^6.3.3",
+    "@jest/globals": "^29.6.2"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "transform": {},
+    "extensionsToTreatAsEsm": [".js"],
+    "globals": {
+      "jest": {
+        "useESM": true
+      }
+    },
+    "moduleNameMapping": {
+      "^(\\.{1,2}/.*)\\.js$": "$1"
+    }
+  },
+  "keywords": [
+    "express",
+    "mongodb",
+    "socket.io",
+    "jwt",
+    "api"
+  ],
+  "author": "",
+  "license": "MIT"
+}

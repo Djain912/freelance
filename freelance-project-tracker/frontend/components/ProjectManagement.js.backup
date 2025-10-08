@@ -1,0 +1,1799 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
+import { 
+  BarChart3, 
+  Plus, 
+  RefreshCw, 
+  FolderOpen, 
+  Clock, 
+  CheckCircle, 
+  AlertCircle, 
+  Users, 
+  Search,
+  Filter,
+  Calendar,
+  DollarSign,
+  Settings,
+  Eye,
+  MessageSquare,
+  Star,
+  Briefcase,
+  Target,
+  Zap,
+  Globe,
+  Smartphone,
+  Palette,
+  PenTool,
+  TrendingUp,
+  Database,
+  Wrench,
+  X,
+  CreditCard,
+  Shield
+} from 'lucide-react'
+import { api } from '../lib/api'
+import PaymentIntegration from './PaymentIntegration'
+
+export default function ProjectManagement({ user }) {
+  console.log('DEBUG - ProjectManagement loaded with user:', user)
+  console.log('DEBUG - User ID being used for filtering:', user?._id)
+  
+  const [projects, setProjects] = useState([])
+  const [activeTab, setActiveTab] = useState('all')
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [selectedProject, setSelectedProject] = useState(null)
+  const [showBidForm, setShowBidForm] = useState(false)
+  const [showPayments, setShowPayments] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchProjects()
+  }, [activeTab])
+
+  const fetchProjects = async () => {
+    try {
+      setLoading(true)
+      const response = await api.getProjects()
+      console.log('DEBUG - Fetched projects:', response)
+      console.log('DEBUG - Sample project structure:', response[0])
+      console.log('DEBUG - Projects with applicants:', response.filter(p => p.applicants && p.applicants.length > 0))
+      setProjects(response)
+    } catch (error) {
+      console.error('Failed to fetch projects:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const getProjectsByStatus = () => {
+    const filteredProjects = (() => {
+      switch (activeTab) {
+        case 'draft':
+          return projects.filter(p => p.status === 'draft')
+        case 'open':
+          return projects.filter(p => p.status === 'open')
+        case 'pending_proposals':
+          console.log('DEBUG - Filtering for pending proposals. Current user ID:', user?._id)
+          console.log('DEBUG - All projects:', projects.map(p => ({ title: p.title, clientId: p.clientId, applicants: p.applicants?.length || 0 })))
+          
+          // Temporary fix: use the test client ID if user is not loaded
+          const clientIdToUse = user?._id || '68aeb702090b274da11c60eb'
+          console.log('DEBUG - Using client ID for filtering:', clientIdToUse)
+          
+          const pendingProjects = projects.filter(p => {
+            const clientMatch = (p.clientId === clientIdToUse) || (p.clientId?._id === clientIdToUse)
+            const hasApplicants = (p.applicants?.length || 0) > 0
+            const isOpen = p.status === 'open'
+            
+            console.log('DEBUG - Project filter check:', {
+              projectTitle: p.title,
+              projectClientId: p.clientId,
+              userIdFromState: clientIdToUse,
+              clientMatch,
+              hasApplicants,
+              applicantsCount: p.applicants?.length || 0,
+              isOpen,
+              passes: clientMatch && hasApplicants && isOpen
+            })
+            
+            return clientMatch && hasApplicants && isOpen
+          })
+          
+          console.log('DEBUG - Final pending proposals filter:', {
+            allProjects: projects.length,
+            userRole: user.role,
+            userId: user._id,
+            pendingProjects: pendingProjects.length,
+            filteredProjects: pendingProjects
+          })
+          return pendingProjects
+        case 'in_progress':
+          return projects.filter(p => p.status === 'in_progress')
+        case 'assigned':
+          // For freelancers - show projects they are assigned to
+          const freelancerIdToUse = user?._id || user?.id
+          return projects.filter(p => {
+            const isAssigned = (p.freelancerId === freelancerIdToUse) || (p.freelancerId?._id === freelancerIdToUse)
+            const isInProgress = p.status === 'in_progress'
+            return isAssigned && isInProgress
+          })
+        case 'completed':
+          return projects.filter(p => p.status === 'completed')
+        case 'my_projects':
+          return user.role === 'client' 
+            ? projects.filter(p => p.clientId === user._id)
+            : projects.filter(p => p.freelancerId === user._id)
+        default:
+          return projects
+      }
+    })()
+    
+    return filteredProjects
+  }
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'draft': return 'bg-yellow-100 text-yellow-800'
+      case 'open': return 'bg-green-100 text-green-800'
+      case 'in_progress': return 'bg-blue-100 text-blue-800'
+      case 'completed': return 'bg-gray-100 text-gray-800'
+      case 'cancelled': return 'bg-red-100 text-red-800'
+      default: return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const getCategoryIcon = (category) => {
+    switch (category) {
+      case 'web_development': return Globe
+      case 'mobile_development': return Smartphone
+      case 'design': return Palette
+      case 'writing': return PenTool
+      case 'marketing': return TrendingUp
+      case 'data_science': return Database
+      default: return Wrench
+    }
+  }
+
+  const handleCreateProject = () => {
+    setShowCreateForm(true)
+  }
+
+  const handleViewProject = async (project) => {
+    try {
+      // Fetch complete project details with populated applicants
+      const fullProject = await api.getProject(project._id)
+      setSelectedProject(fullProject.project || fullProject)
+    } catch (error) {
+      console.error('Failed to fetch project details:', error)
+      // Fallback to the basic project data
+      setSelectedProject(project)
+    }
+  }
+
+  const handleBidOnProject = (project) => {
+    setSelectedProject(project)
+    setShowBidForm(true)
+  }
+
+  const handlePublishProject = async (projectId) => {
+    try {
+      await api.updateProjectStatus(projectId, 'open')
+      // Refresh the projects list to show the updated status
+      fetchProjects()
+    } catch (error) {
+      console.error('Failed to publish project:', error)
+      alert('Failed to publish project. Please try again.')
+    }
+  }
+
+  const handleMarkComplete = async (project) => {
+    try {
+      const confirmation = window.confirm(
+        `Are you sure you want to mark "${project.title}" as complete? ` +
+        (project.completion?.clientMarkedComplete || project.completion?.freelancerMarkedComplete 
+          ? 'This will finalize the project completion.'
+          : 'The other party will also need to mark it complete to finalize.')
+      )
+      
+      if (!confirmation) return
+      
+      const response = await api.markProjectComplete(project._id)
+      
+      if (response.requiresOtherParty) {
+        alert('You have marked the project as complete. Waiting for the other party to confirm completion.')
+      } else {
+        alert('Project completed successfully!')
+      }
+      
+      fetchProjects() // Refresh the projects list
+    } catch (error) {
+      console.error('Failed to mark project complete:', error)
+      alert('Failed to mark project as complete. Please try again.')
+    }
+  }
+
+  const createTestInProgressProject = async () => {
+    try {
+      // Use known test user IDs (you'll need to replace these with actual IDs from your database)
+      const clientId = user?.role === 'client' ? user._id : '68aeb702090b274da11c60eb'
+      const freelancerId = user?.role === 'freelancer' ? user._id : '68aeb702090b274da11c60ed'
+      
+      const response = await fetch('/api/debug/create-test-project', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          clientId,
+          freelancerId,
+          title: `Test Completion Project ${Date.now()}`
+        })
+      })
+      
+      if (response.ok) {
+        alert('Test in-progress project created successfully!')
+        fetchProjects()
+      } else {
+        const error = await response.json()
+        alert(`Failed to create test project: ${error.message}`)
+      }
+    } catch (error) {
+      console.error('Failed to create test project:', error)
+      alert('Failed to create test project. Please try again.')
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex justify-center items-center">
+        <div className="text-center">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+            className="w-16 h-16 border-4 border-blue-200 border-t-blue-500 rounded-full mx-auto mb-4"
+          />
+          <h2 className="text-2xl font-semibold text-gray-700 mb-2">Loading Projects</h2>
+          <p className="text-gray-500">Please wait while we fetch the latest data...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50 p-6">
+      {showPayments ? (
+        <div className="max-w-7xl mx-auto space-y-8">
+          <div className="flex items-center space-x-4 mb-6">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowPayments(false)}
+              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
+            >
+              <X className="h-6 w-6" />
+            </motion.button>
+            <h2 className="text-2xl font-bold text-gray-900">Back to Projects</h2>
+          </div>
+          <PaymentIntegration user={user} />
+        </div>
+      ) : (
+        <div className="max-w-7xl mx-auto space-y-8">
+      {/* Enhanced Header */}
+      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-6 mb-8">
+        <div>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent flex items-center gap-3">
+            <BarChart3 className="h-10 w-10 text-blue-600" />
+            Project Dashboard
+          </h1>
+          <p className="text-gray-600 text-lg mt-2">
+            {user.role === 'client' 
+              ? 'Manage your projects and find talented freelancers' 
+              : 'Browse available projects and submit proposals'}
+          </p>
+        </div>
+        
+        <div className="flex flex-col sm:flex-row gap-3">
+          {user.role === 'client' && (
+            <motion.button
+              whileHover={{ scale: 1.05, y: -2 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleCreateProject}
+              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2"
+            >
+              <Plus className="h-5 w-5" />
+              Create Project
+            </motion.button>
+          )}
+          
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={fetchProjects}
+            disabled={loading}
+            className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200 flex items-center gap-2 shadow-sm"
+          >
+            <motion.div
+              animate={loading ? { rotate: 360 } : {}}
+              transition={{ duration: 1, repeat: loading ? Infinity : 0, ease: "linear" }}
+            >
+              <RefreshCw className="h-5 w-5" />
+            </motion.div>
+            Refresh
+          </motion.button>
+        </div>
+      </div>
+
+      {/* Enhanced Tabs */}
+      <div className="relative bg-white rounded-2xl shadow-sm border border-gray-200/50 p-1 mb-6">
+        <nav className="flex space-x-1 overflow-x-auto scrollbar-hide">
+          {[
+            { id: 'all', label: 'All Projects', count: projects.length, icon: BarChart3 },
+            ...(user.role === 'client' ? [
+              { id: 'draft', label: 'Draft', count: projects.filter(p => p.status === 'draft').length, icon: FolderOpen },
+              { id: 'pending_proposals', label: 'Pending Proposals', 
+                count: projects.filter(p => {
+                  const clientMatch = (p.clientId === user._id) || (p.clientId?._id === user._id)
+                  return clientMatch && p.status === 'open' && (p.applicants?.length || 0) > 0
+                }).length, icon: AlertCircle }
+            ] : []),
+            ...(user.role === 'freelancer' ? [
+              { id: 'assigned', label: 'Assigned', 
+                count: projects.filter(p => {
+                  const freelancerIdToUse = user?._id || user?.id
+                  const isAssigned = (p.freelancerId === freelancerIdToUse) || (p.freelancerId?._id === freelancerIdToUse)
+                  return isAssigned && p.status === 'in_progress'
+                }).length, icon: Briefcase }
+            ] : []),
+            { id: 'open', label: 'Open', count: projects.filter(p => p.status === 'open').length, icon: FolderOpen },
+            { id: 'in_progress', label: 'In Progress', count: projects.filter(p => p.status === 'in_progress').length, icon: Clock },
+            { id: 'completed', label: 'Completed', count: projects.filter(p => p.status === 'completed').length, icon: CheckCircle },
+            { id: 'my_projects', label: user.role === 'client' ? 'My Projects' : 'My Work', 
+              count: user.role === 'client' 
+                ? projects.filter(p => p.clientId === user._id).length
+                : projects.filter(p => p.freelancerId === user._id).length, icon: Users }
+          ].map((tab) => {
+            const IconComponent = tab.icon
+            return (
+              <motion.button
+                key={tab.id}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative px-4 py-3 rounded-xl font-semibold text-sm whitespace-nowrap transition-all duration-300 ${
+                  activeTab === tab.id
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-500/25'
+                    : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                } ${tab.id === 'pending_proposals' && tab.count > 0 ? 'text-orange-600 font-bold hover:text-orange-700' : ''}`}
+              >
+                <div className="flex items-center space-x-2">
+                  <IconComponent className="h-4 w-4" />
+                  <span>{tab.label}</span>
+                  <motion.span 
+                    key={tab.count}
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className={`inline-flex items-center justify-center min-w-[20px] h-5 text-xs font-bold rounded-full ${
+                      activeTab === tab.id 
+                        ? 'bg-white/20 text-white' 
+                        : tab.id === 'pending_proposals' && tab.count > 0
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-gray-200 text-gray-600'
+                    }`}
+                  >
+                    {tab.count}
+                  </motion.span>
+                </div>
+                {tab.id === 'pending_proposals' && tab.count > 0 && (
+                  <motion.span 
+                    animate={{ scale: [1, 1.2, 1] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                    className="absolute -top-1 -right-1 h-3 w-3 bg-orange-500 rounded-full"
+                  ></motion.span>
+                )}
+              </motion.button>
+            )
+          })}
+        </nav>
+      </div>
+
+      {/* Pending Proposals Alert for Clients */}
+      {user.role === 'client' && projects.filter(p => {
+        const clientMatch = (p.clientId === user._id) || (p.clientId?._id === user._id)
+        return clientMatch && p.status === 'open' && (p.applicants?.length || 0) > 0
+      }).length > 0 && activeTab !== 'pending_proposals' && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <span className="text-orange-600 text-xl">🔔</span>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-orange-800">
+                You have {projects.filter(p => {
+                  const clientMatch = (p.clientId === user._id) || (p.clientId?._id === user._id)
+                  return clientMatch && p.status === 'open' && (p.applicants?.length || 0) > 0
+                }).length} project(s) with pending proposals
+              </h3>
+              <p className="mt-1 text-sm text-orange-700">
+                Review and accept proposals to start working with freelancers.
+              </p>
+            </div>
+            <div className="ml-auto">
+              <button
+                onClick={() => setActiveTab('pending_proposals')}
+                className="btn btn-sm bg-orange-600 text-white hover:bg-orange-700"
+              >
+                Review Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Enhanced Debug Section - Temporary for testing completion workflow */}
+      {process.env.NODE_ENV === 'development' && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8 p-6 bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 border border-green-200/50 rounded-2xl shadow-lg backdrop-blur-sm"
+        >
+          <div className="flex items-center space-x-3 mb-4">
+            <div className="w-10 h-10 bg-gradient-to-r from-green-400 to-emerald-400 rounded-xl flex items-center justify-center text-white font-bold text-lg">
+              <DollarSign className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+                Payment Integration
+              </h3>
+              <p className="text-sm text-green-600">Secure payment processing for your projects</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setShowPayments(true)}
+              className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white py-3 px-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
+            >
+              <div className="flex items-center justify-center space-x-2">
+                <CreditCard className="h-4 w-4" />
+                <span>Setup Payments</span>
+              </div>
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setShowPayments(true)}
+              className="bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 px-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
+            >
+              <div className="flex items-center justify-center space-x-2">
+                <Shield className="h-4 w-4" />
+                <span>Escrow Service</span>
+              </div>
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setShowPayments(true)}
+              className="bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 px-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
+            >
+              <div className="flex items-center justify-center space-x-2">
+                <TrendingUp className="h-4 w-4" />
+                <span>View Earnings</span>
+              </div>
+            </motion.button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Enhanced Projects Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        {getProjectsByStatus().map((project) => (
+          <motion.div
+            key={project._id}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            whileHover={{ y: -4, scale: 1.02 }}
+            transition={{ duration: 0.3 }}
+            className="group relative bg-white rounded-2xl shadow-sm border border-gray-200/50 p-6 hover:shadow-xl hover:border-blue-200/50 transition-all duration-300 backdrop-blur-sm"
+          >
+            {/* Project Header */}
+            <div className="flex justify-between items-start mb-4">
+              <div className="flex items-start space-x-3 flex-1">
+                <div className="p-2 bg-blue-50 rounded-lg">
+                  {(() => {
+                    const CategoryIcon = getCategoryIcon(project.category)
+                    return <CategoryIcon className="h-5 w-5 text-blue-600" />
+                  })()}
+                </div>
+                <h3 className="text-lg font-bold text-gray-900 line-clamp-2 group-hover:text-blue-600 transition-colors duration-300 flex-1">
+                  {project.title}
+                </h3>
+              </div>
+              <motion.span 
+                whileHover={{ scale: 1.1 }}
+                className={`px-3 py-1 rounded-full text-xs font-semibold backdrop-blur-sm ${getStatusColor(project.status)} shadow-sm`}
+              >
+                {project.status.replace('_', ' ').toUpperCase()}
+              </motion.span>
+            </div>
+
+            {/* Project Details */}
+            <div className="space-y-4">
+              <p className="text-gray-600 text-sm line-clamp-3 leading-relaxed">
+                {project.description}
+              </p>
+
+              <div className="flex justify-between items-center">
+                <div className="flex items-center space-x-2">
+                  <DollarSign className="h-4 w-4 text-green-600" />
+                  <span className="text-xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+                    ${project.budget?.total?.toLocaleString()}
+                  </span>
+                  <span className="text-gray-500 text-sm">
+                    {project.budget?.currency || 'USD'}
+                  </span>
+                </div>
+                {project.timeline?.endDate && (
+                  <div className="text-right">
+                    <div className="flex items-center justify-end space-x-1 mb-1">
+                      <Calendar className="h-3 w-3 text-gray-400" />
+                      <p className="text-xs text-gray-500 uppercase tracking-wide">Deadline</p>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-700">
+                      {new Date(project.timeline.endDate).toLocaleDateString()}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Enhanced Skills Display */}
+              {project.skills && project.skills.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {project.skills.slice(0, 3).map((skill, index) => (
+                    <motion.span
+                      key={index}
+                      whileHover={{ scale: 1.05 }}
+                      className="px-3 py-1 bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 text-xs rounded-full font-medium border border-blue-200/50 hover:border-blue-300/50 transition-all duration-200"
+                    >
+                      {skill}
+                    </motion.span>
+                  ))}
+                  {project.skills.length > 3 && (
+                    <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded-full font-medium">
+                      +{project.skills.length - 3} more
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Enhanced Project Stats */}
+              <div className="flex justify-between items-center text-sm text-gray-500 pt-3 border-t border-gray-100">
+                <div className="flex items-center space-x-2">
+                  <Users className="h-4 w-4 text-blue-400" />
+                  <span>
+                    {project.applicants?.length || 0} proposal{(project.applicants?.length || 0) !== 1 ? 's' : ''}
+                  </span>
+                  {user.role === 'client' && ((project.clientId === user._id) || (project.clientId?._id === user._id)) && (project.applicants?.length || 0) > 0 && (
+                    <motion.span 
+                      animate={{ pulse: [1, 1.1, 1] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                      className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-orange-100 to-red-100 text-orange-700 border border-orange-200"
+                    >
+                      <AlertCircle className="h-3 w-3 mr-1" />
+                      Needs Review
+                    </motion.span>
+                  )}
+                </div>
+                <div className="flex items-center space-x-1">
+                  <Clock className="h-3 w-3 text-gray-400" />
+                  <span className="text-xs">
+                    {project.createdAt && `${new Date(project.createdAt).toLocaleDateString()}`}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Enhanced Action Buttons */}
+            <div className="mt-6 space-y-3">
+              <div className="flex flex-col sm:flex-row gap-2">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => handleViewProject(project)}
+                  className="flex-1 bg-gradient-to-r from-gray-50 to-slate-50 text-gray-700 py-2.5 px-4 rounded-xl font-medium text-sm border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all duration-200"
+                >
+                  <div className="flex items-center justify-center space-x-2">
+                    <Eye className="h-4 w-4" />
+                    <span>View Details</span>
+                  </div>
+                </motion.button>
+                
+                {user.role === 'client' && ((project.clientId === user._id) || (project.clientId?._id === user._id)) && project.status === 'open' && (project.applicants?.length || 0) > 0 && (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    animate={{ 
+                      boxShadow: ["0 4px 14px 0 rgba(234, 88, 12, 0.2)", "0 6px 20px 0 rgba(234, 88, 12, 0.35)", "0 4px 14px 0 rgba(234, 88, 12, 0.2)"]
+                    }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                    onClick={() => handleViewProject(project)}
+                    className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 text-white py-2.5 px-4 rounded-xl font-semibold text-sm shadow-lg hover:shadow-xl transition-all duration-200"
+                  >
+                    <div className="flex items-center justify-center space-x-2">
+                      <AlertCircle className="h-4 w-4" />
+                      <span>Review Proposals ({project.applicants?.length || 0})</span>
+                    </div>
+                  </motion.button>
+                )}
+                
+                {user.role === 'freelancer' && project.status === 'open' && !project.freelancerId && (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handleBidOnProject(project)}
+                    className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white py-2.5 px-4 rounded-xl font-semibold text-sm shadow-lg hover:shadow-xl transition-all duration-200"
+                  >
+                    <div className="flex items-center justify-center space-x-2">
+                      <Star className="h-4 w-4" />
+                      <span>Submit Proposal</span>
+                    </div>
+                  </motion.button>
+                )}
+                
+                {user.role === 'client' && project.clientId?._id === (user._id || user.id) && project.status === 'draft' && (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handlePublishProject(project._id)}
+                    className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white py-2.5 px-4 rounded-xl font-semibold text-sm shadow-lg hover:shadow-xl transition-all duration-200"
+                  >
+                    <div className="flex items-center justify-center space-x-2">
+                      <Target className="h-4 w-4" />
+                      <span>Publish Project</span>
+                    </div>
+                  </motion.button>
+                )}
+                
+                {user.role === 'client' && project.clientId?._id === (user._id || user.id) && project.status !== 'draft' && (
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handleViewProject(project)}
+                    className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2.5 px-4 rounded-xl font-semibold text-sm shadow-lg hover:shadow-xl transition-all duration-200"
+                  >
+                    <div className="flex items-center justify-center space-x-2">
+                      <Settings className="h-4 w-4" />
+                      <span>Manage</span>
+                    </div>
+                  </motion.button>
+                )}
+              </div>
+              
+              {/* Mark Complete Button for In Progress Projects */}
+              {project.status === 'in_progress' && (
+                // For clients - if they own the project
+                (user.role === 'client' && (project.clientId?._id === user._id || project.clientId === user._id)) ||
+                // For freelancers - if they are assigned to the project
+                (user.role === 'freelancer' && (project.freelancerId?._id === user._id || project.freelancerId === user._id))
+              ) && (
+                <div className="flex-1">
+                  {/* Enhanced Completion Status Display */}
+                  {project.completion && (
+                    <div className="mb-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200/50 shadow-sm">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold text-blue-800 uppercase tracking-wide">Completion Progress</span>
+                        <div className="flex space-x-1">
+                          <div className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                            project.completion.clientMarkedComplete ? 'bg-emerald-400 shadow-lg shadow-emerald-400/50' : 'bg-gray-300'
+                          }`}></div>
+                          <div className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                            project.completion.freelancerMarkedComplete ? 'bg-emerald-400 shadow-lg shadow-emerald-400/50' : 'bg-gray-300'
+                          }`}></div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="flex items-center space-x-2">
+                          <div className={`w-3 h-3 rounded-full flex items-center justify-center transition-all duration-300 ${
+                            project.completion.clientMarkedComplete 
+                              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' 
+                              : 'bg-gray-200 text-gray-500'
+                          }`}>
+                            {project.completion.clientMarkedComplete ? (
+                              <CheckCircle className="h-2 w-2" />
+                            ) : (
+                              <div className="w-1 h-1 bg-gray-400 rounded-full" />
+                            )}
+                          </div>
+                          <span className={`font-medium transition-colors duration-300 ${
+                            project.completion.clientMarkedComplete ? 'text-emerald-700' : 'text-gray-600'
+                          }`}>Client</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <div className={`w-3 h-3 rounded-full flex items-center justify-center transition-all duration-300 ${
+                            project.completion.freelancerMarkedComplete 
+                              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' 
+                              : 'bg-gray-200 text-gray-500'
+                          }`}>
+                            {project.completion.freelancerMarkedComplete ? (
+                              <CheckCircle className="h-2 w-2" />
+                            ) : (
+                              <div className="w-1 h-1 bg-gray-400 rounded-full" />
+                            )}
+                          </div>
+                          <span className={`font-medium transition-colors duration-300 ${
+                            project.completion.freelancerMarkedComplete ? 'text-emerald-700' : 'text-gray-600'
+                          }`}>Freelancer</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handleMarkComplete(project)}
+                    disabled={
+                      (user.role === 'client' && project.completion?.clientMarkedComplete) ||
+                      (user.role === 'freelancer' && project.completion?.freelancerMarkedComplete)
+                    }
+                    className={`w-full py-2.5 px-4 rounded-xl font-semibold text-sm transition-all duration-300 transform ${
+                      (user.role === 'client' && project.completion?.clientMarkedComplete) ||
+                      (user.role === 'freelancer' && project.completion?.freelancerMarkedComplete)
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/25 cursor-not-allowed opacity-80'
+                        : project.completion?.clientMarkedComplete || project.completion?.freelancerMarkedComplete
+                        ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 animate-pulse'
+                        : 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 hover:from-blue-600 hover:to-indigo-600'
+                    }`}
+                  >
+                    <div className="flex items-center justify-center space-x-2">
+                      {(user.role === 'client' && project.completion?.clientMarkedComplete) ||
+                       (user.role === 'freelancer' && project.completion?.freelancerMarkedComplete) ? (
+                        <>
+                          <CheckCircle className="h-4 w-4" />
+                          <span>You Approved</span>
+                        </>
+                      ) : project.completion?.clientMarkedComplete || project.completion?.freelancerMarkedComplete ? (
+                        <>
+                          <Clock className="h-4 w-4" />
+                          <span>Awaiting Confirmation</span>
+                        </>
+                      ) : (
+                        <>
+                          <Target className="h-4 w-4" />
+                          <span>{user.role === 'client' ? 'Approve as Client' : 'Confirm as Freelancer'}</span>
+                        </>
+                      )}
+                    </div>
+                  </motion.button>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Empty State */}
+      {getProjectsByStatus().length === 0 && (
+        <div className="text-center py-12 bg-white rounded-2xl border border-gray-200 shadow-sm">
+          <div className="text-gray-400 mb-4">
+            <FolderOpen className="h-16 w-16 mx-auto" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No projects found</h3>
+          <p className="text-gray-500 mb-4">
+            {activeTab === 'my_projects' 
+              ? user.role === 'client' 
+                ? "You haven't created any projects yet"
+                : "You haven't been assigned to any projects yet"
+              : `No ${activeTab} projects available`}
+          </p>
+          {user.role === 'client' && activeTab === 'my_projects' && (
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleCreateProject}
+              className="btn btn-primary flex items-center gap-2 mx-auto"
+            >
+              <Plus className="h-4 w-4" />
+              Create Your First Project
+            </motion.button>
+          )}
+        </div>
+      )}
+
+      {/* Modals */}
+      {showCreateForm && (
+        <CreateProjectModal
+          onClose={() => setShowCreateForm(false)}
+          onSuccess={fetchProjects}
+        />
+      )}
+
+      {selectedProject && !showBidForm && (
+        <ProjectDetailsModal
+          project={selectedProject}
+          user={user}
+          onClose={() => setSelectedProject(null)}
+          onSuccess={fetchProjects}
+          onMarkComplete={handleMarkComplete}
+        />
+      )}
+
+      {showBidForm && selectedProject && (
+        <BidModal
+          project={selectedProject}
+          onClose={() => {
+            setShowBidForm(false)
+            setSelectedProject(null)
+          }}
+          onSuccess={fetchProjects}
+        />
+      )}
+      </div>
+
+      {/* Modals */}
+      {showCreateForm && (
+        <CreateProjectModal
+          onClose={() => setShowCreateForm(false)}
+          onSuccess={fetchProjects}
+        />
+      )}
+
+      {selectedProject && !showBidForm && (
+        <ProjectDetailsModal
+          project={selectedProject}
+          user={user}
+          onClose={() => setSelectedProject(null)}
+          onSuccess={fetchProjects}
+          onMarkComplete={handleMarkComplete}
+        />
+      )}
+
+      {showBidForm && selectedProject && (
+        <BidModal
+          project={selectedProject}
+          onClose={() => {
+            setShowBidForm(false)
+            setSelectedProject(null)
+          }}
+          onSuccess={fetchProjects}
+        />
+      )}
+    </div>
+  )
+}
+    title: '',
+    description: '',
+    budget: { total: '', currency: 'USD' },
+    timeline: { endDate: '', estimatedHours: '' },
+    skills: [],
+    category: '',
+    priority: 'medium'
+  })
+  const [newSkill, setNewSkill] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    
+    // Client-side validation
+    if (formData.skills.length === 0) {
+      alert('Please add at least one required skill for the project.')
+      setSaving(false)
+      return
+    }
+    
+    if (!formData.category) {
+      alert('Please select a project category.')
+      setSaving(false)
+      return
+    }
+    
+    if (!formData.timeline.endDate) {
+      alert('Please set a project deadline.')
+      setSaving(false)
+      return
+    }
+    
+    // Check if deadline is in the future
+    const deadlineDate = new Date(formData.timeline.endDate)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0) // Reset time to start of day
+    
+    if (deadlineDate <= today) {
+      alert('Project deadline must be in the future.')
+      setSaving(false)
+      return
+    }
+    
+    try {
+      const projectData = {
+        ...formData,
+        budget: {
+          total: Number(formData.budget.total),
+          currency: formData.budget.currency
+        },
+        timeline: {
+          endDate: new Date(formData.timeline.endDate),
+          estimatedHours: formData.timeline.estimatedHours ? Number(formData.timeline.estimatedHours) : undefined
+        }
+      }
+      
+      console.log('Submitting project data:', projectData)
+      await api.createProject(projectData)
+      onSuccess()
+      onClose()
+    } catch (error) {
+      console.error('Failed to create project:', error)
+      alert(`Failed to create project: ${error.message}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const addSkill = () => {
+    if (newSkill.trim() && !formData.skills.includes(newSkill.trim())) {
+      setFormData({
+        ...formData,
+        skills: [...formData.skills, newSkill.trim()]
+      })
+      setNewSkill('')
+    }
+  }
+
+  const removeSkill = (skillToRemove) => {
+    setFormData({
+      ...formData,
+      skills: formData.skills.filter(skill => skill !== skillToRemove)
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Plus className="h-6 w-6 text-blue-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900">Create New Project</h2>
+            </div>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Title */}
+            <div>
+              <label className="label">Project Title</label>
+              <input
+                type="text"
+                required
+                className="input"
+                placeholder="e.g., Build a React E-commerce Website"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              />
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="label">Description</label>
+              <textarea
+                required
+                rows={4}
+                className="input"
+                placeholder="Describe your project requirements in detail..."
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              />
+            </div>
+
+            {/* Budget and Timeline */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="label">Budget (USD)</label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  className="input"
+                  placeholder="5000"
+                  value={formData.budget.total}
+                  onChange={(e) => setFormData({ 
+                    ...formData, 
+                    budget: { ...formData.budget, total: e.target.value }
+                  })}
+                />
+              </div>
+              <div>
+                <label className="label">Deadline</label>
+                <input
+                  type="date"
+                  required
+                  className="input"
+                  min={new Date().toISOString().split('T')[0]}
+                  value={formData.timeline.endDate}
+                  onChange={(e) => setFormData({ 
+                    ...formData, 
+                    timeline: { ...formData.timeline, endDate: e.target.value }
+                  })}
+                />
+              </div>
+            </div>
+
+            {/* Category and Estimated Hours */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="label">Category *</label>
+                <select
+                  required
+                  className="input"
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                >
+                  <option value="">Select category</option>
+                  <option value="web_development">🌐 Web Development</option>
+                  <option value="mobile_development">📱 Mobile Development</option>
+                  <option value="design">🎨 Design</option>
+                  <option value="writing">✍️ Writing</option>
+                  <option value="marketing">📈 Marketing</option>
+                  <option value="data_science">📊 Data Science</option>
+                  <option value="other">🔧 Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Estimated Hours (Optional)</label>
+                <input
+                  type="number"
+                  min="1"
+                  className="input"
+                  placeholder="120"
+                  value={formData.timeline.estimatedHours}
+                  onChange={(e) => setFormData({ 
+                    ...formData, 
+                    timeline: { ...formData.timeline, estimatedHours: e.target.value }
+                  })}
+                />
+              </div>
+            </div>
+
+            {/* Skills */}
+            <div>
+              <label className="label">Required Skills *</label>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  className="input flex-1"
+                  placeholder="e.g., React, Node.js, MongoDB"
+                  value={newSkill}
+                  onChange={(e) => setNewSkill(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSkill())}
+                />
+                <button
+                  type="button"
+                  onClick={addSkill}
+                  className="btn btn-outline"
+                >
+                  Add
+                </button>
+              </div>
+              {formData.skills.length === 0 && (
+                <p className="text-sm text-red-500 mb-2">Please add at least one skill</p>
+              )}
+              {formData.skills.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {formData.skills.map((skill, index) => (
+                    <span
+                      key={index}
+                      className="bg-primary-100 text-primary-800 px-2 py-1 rounded text-sm flex items-center"
+                    >
+                      {skill}
+                      <button
+                        type="button"
+                        onClick={() => removeSkill(skill)}
+                        className="ml-1 text-primary-600 hover:text-primary-800"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Priority */}
+            <div>
+              <label className="label">Priority</label>
+              <select
+                className="input"
+                value={formData.priority}
+                onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+
+            {/* Submit Button */}
+            <div className="flex justify-end space-x-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="btn btn-outline"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="btn btn-primary"
+              >
+                {saving ? 'Creating...' : 'Create Project'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Project Details Modal Component
+function ProjectDetailsModal({ project, user, onClose, onSuccess, onMarkComplete }) {
+  const [loading, setLoading] = useState(false)
+  const [proposals, setProposals] = useState([])
+
+  // Debug authentication data on modal load
+  useEffect(() => {
+    console.log('=== AUTHENTICATION DEBUG ===')
+    console.log('Token in localStorage:', localStorage.getItem('token'))
+    console.log('User in localStorage:', localStorage.getItem('user'))
+    console.log('User prop passed to modal:', user)
+    console.log('Project client ID:', project.clientId)
+    console.log('=============================')
+  }, [])
+
+  useEffect(() => {
+    // Use fallback user ID if user is not loaded (same as in the main component)
+    const clientIdToUse = user?._id || '68aeb702090b274da11c60eb'
+    
+    if ((user?.role === 'client' || !user?.role) && (project.clientId === clientIdToUse || project.clientId?._id === clientIdToUse)) {
+      // Load proposals for this project
+      console.log('DEBUG - Loading proposals for project:', project.title, 'applicants:', project.applicants)
+      setProposals(project.applicants || [])
+    }
+  }, [project, user])
+
+  const handleAcceptProposal = async (freelancerId) => {
+    try {
+      setLoading(true)
+      
+      // Debug authentication
+      const token = localStorage.getItem('token')
+      const storedUser = localStorage.getItem('user')
+      console.log('DEBUG - Accept proposal auth check:', {
+        hasToken: !!token,
+        token: token?.substring(0, 20) + '...',
+        hasStoredUser: !!storedUser,
+        storedUser: storedUser,
+        currentUser: user,
+        currentUserId: user?._id,
+        currentUserRole: user?.role,
+        projectClientId: project.clientId,
+        projectClientIdValue: project.clientId?._id || project.clientId,
+        freelancerId,
+        projectId: project._id
+      })
+      
+      await api.acceptBid(project._id, freelancerId)
+      alert('Proposal accepted successfully! Project status updated to In Progress.')
+      onSuccess()
+      onClose()
+    } catch (error) {
+      console.error('Failed to accept proposal:', error)
+      alert('Failed to accept proposal. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRejectProposal = async (freelancerId) => {
+    if (confirm('Are you sure you want to reject this proposal?')) {
+      try {
+        setLoading(true)
+        // We'll implement reject API later, for now just update locally
+        alert('Proposal rejection feature will be implemented soon.')
+      } catch (error) {
+        console.error('Failed to reject proposal:', error)
+        alert('Failed to reject proposal. Please try again.')
+      } finally {
+        setLoading(false)
+      }
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex justify-between items-start mb-6">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">{project.title}</h2>
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)}`}>
+                {project.status.replace('_', ' ')}
+              </span>
+            </div>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+              ✕
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Proposals Section for Clients - Show First */}
+            {((user?.role === 'client' || !user?.role) && 
+              ((project.clientId === (user?._id || '68aeb702090b274da11c60eb')) || 
+               (project.clientId?._id === (user?._id || '68aeb702090b274da11c60eb'))) && 
+              proposals.length > 0) && (
+              <div className="lg:col-span-3 mb-6">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                  <h3 className="font-semibold text-blue-900 mb-2 text-lg">
+                    📋 Proposals Received ({proposals.length})
+                  </h3>
+                  <p className="text-blue-700 text-sm">
+                    Review and accept the best proposal for your project. Once accepted, the project will move to "In Progress" status.
+                  </p>
+                </div>
+                
+                <div className="space-y-4">
+                  {proposals.map((proposal, index) => {
+                    const freelancer = proposal.freelancerId
+                    return (
+                      <div key={proposal._id || index} className="border rounded-lg p-4 bg-white shadow-sm">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h4 className="font-medium text-gray-900">
+                              {freelancer?.name || `Freelancer #${index + 1}`}
+                            </h4>
+                            <p className="text-sm text-gray-500">
+                              {freelancer?.email}
+                            </p>
+                            <p className="text-xs text-gray-400">
+                              Applied {new Date(proposal.appliedAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-semibold text-green-600 text-lg">
+                              ${proposal.proposedBudget?.toLocaleString()}
+                            </p>
+                            {proposal.proposedTimeline && (
+                              <p className="text-sm text-gray-500">
+                                {proposal.proposedTimeline} days
+                              </p>
+                            )}
+                            <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium mt-1 ${
+                              proposal.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                              proposal.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                              'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {proposal.status || 'pending'}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {proposal.coverLetter && (
+                          <div className="mb-3">
+                            <h5 className="text-sm font-medium text-gray-700 mb-1">Cover Letter:</h5>
+                            <p className="text-gray-600 text-sm bg-gray-50 p-3 rounded border-l-4 border-blue-500">
+                              {proposal.coverLetter}
+                            </p>
+                          </div>
+                        )}
+                        
+                        {project.status === 'open' && proposal.status === 'pending' && (
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleAcceptProposal(proposal.freelancerId._id || proposal.freelancerId)}
+                              disabled={loading}
+                              className="btn btn-primary btn-sm bg-green-600 hover:bg-green-700"
+                            >
+                              {loading ? 'Accepting...' : 'Accept Proposal'}
+                            </button>
+                            <button
+                              onClick={() => handleRejectProposal(proposal.freelancerId._id || proposal.freelancerId)}
+                              disabled={loading}
+                              className="btn btn-outline btn-sm text-red-600 border-red-300 hover:bg-red-50"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        )}
+                        
+                        {proposal.status === 'accepted' && (
+                          <div className="mt-2 p-2 bg-green-50 rounded border border-green-200">
+                            <p className="text-sm text-green-700 font-medium">
+                              ✅ This proposal has been accepted
+                            </p>
+                            {proposal.acceptedAt && (
+                              <p className="text-xs text-green-600">
+                                Accepted on {new Date(proposal.acceptedAt).toLocaleDateString()}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Project Details */}
+            <div className="lg:col-span-2 space-y-6">
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2">Description</h3>
+                <p className="text-gray-700">{project.description}</p>
+              </div>
+
+              {project.skills && project.skills.length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-2">Required Skills</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {project.skills.map((skill, index) => (
+                      <span
+                        key={index}
+                        className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-sm"
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Sidebar */}
+            <div className="space-y-6">
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h3 className="font-semibold text-gray-900 mb-3">Project Details</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Budget:</span>
+                    <span className="font-medium">${project.budget?.total?.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Deadline:</span>
+                    <span className="font-medium">
+                      {project.timeline?.endDate && new Date(project.timeline.endDate).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Category:</span>
+                    <span className="font-medium">{project.category}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Priority:</span>
+                    <span className="font-medium capitalize">{project.priority}</span>
+                  </div>
+                  {project.timeline?.estimatedHours && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Est. Hours:</span>
+                      <span className="font-medium">{project.timeline.estimatedHours}h</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Client Info */}
+              {project.clientId && (
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="font-semibold text-gray-900 mb-3">Client</h3>
+                  <div className="text-sm">
+                    <p className="font-medium">{project.clientId.name || 'Client Name'}</p>
+                    <p className="text-gray-500">⭐ 4.8 (24 reviews)</p>
+                    <p className="text-gray-500">📍 Member since 2023</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Freelancer Info (if assigned) */}
+              {project.freelancerId && (
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="font-semibold text-gray-900 mb-3">Assigned Freelancer</h3>
+                  <div className="text-sm">
+                    <p className="font-medium">{project.freelancerId.name || 'Freelancer Name'}</p>
+                    <p className="text-gray-500">⭐ 4.9 (156 reviews)</p>
+                    <p className="text-gray-500">✅ Top Rated Plus</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Enhanced Project Completion Section */}
+              {project.status === 'in_progress' && project.completion && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5 }}
+                  className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200/50 shadow-lg backdrop-blur-sm"
+                >
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                      Project Completion
+                    </h3>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 bg-blue-400 rounded-full animate-pulse"></div>
+                      <span className="text-sm font-medium text-blue-600">In Progress</span>
+                    </div>
+                  </div>
+                  
+                  <div className="grid md:grid-cols-2 gap-6 mb-6">
+                    {/* Client Completion Card */}
+                    <motion.div 
+                      whileHover={{ scale: 1.02 }}
+                      className={`relative overflow-hidden rounded-xl border-2 transition-all duration-300 ${
+                        project.completion.clientMarkedComplete 
+                          ? 'border-emerald-400 bg-gradient-to-br from-emerald-50 to-green-50 shadow-lg shadow-emerald-400/20' 
+                          : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-md'
+                      }`}
+                    >
+                      <div className="p-5">
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <h4 className="font-bold text-gray-800 text-lg mb-1">Client Approval</h4>
+                            <p className="text-sm text-gray-600">Project owner must sign off</p>
+                          </div>
+                          <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${
+                            project.completion.clientMarkedComplete 
+                              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' 
+                              : 'bg-gray-100 text-gray-400'
+                          }`}>
+                            {project.completion.clientMarkedComplete ? (
+                              <motion.div 
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                transition={{ type: "spring", stiffness: 300 }}
+                              >
+                                ✓
+                              </motion.div>
+                            ) : (
+                              <div className="w-6 h-6 border-2 border-dashed border-gray-300 rounded-full"></div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className={`text-sm font-medium transition-colors duration-300 ${
+                          project.completion.clientMarkedComplete ? 'text-emerald-700' : 'text-gray-500'
+                        }`}>
+                          {project.completion.clientMarkedComplete ? (
+                            <div className="flex items-center space-x-2">
+                              <span className="w-2 h-2 bg-emerald-400 rounded-full"></span>
+                              <span>Approved ✓</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center space-x-2">
+                              <span className="w-2 h-2 bg-gray-300 rounded-full animate-pulse"></span>
+                              <span>Awaiting approval</span>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {user?.role === 'client' && 
+                         (project.clientId?._id === user._id || project.clientId === user._id) && 
+                         !project.completion.clientMarkedComplete && (
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => {
+                              onMarkComplete(project)
+                              onClose()
+                            }}
+                            disabled={loading}
+                            className="mt-4 w-full bg-gradient-to-r from-blue-500 to-indigo-500 text-white py-3 px-4 rounded-lg font-semibold shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all duration-300"
+                          >
+                            {loading ? (
+                              <div className="flex items-center justify-center space-x-2">
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                <span>Processing...</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-center space-x-2">
+                                <span>⚡</span>
+                                <span>Approve as Client</span>
+                              </div>
+                            )}
+                          </motion.button>
+                        )}
+                      </div>
+                    </motion.div>
+
+                    {/* Freelancer Completion Card */}
+                    <motion.div 
+                      whileHover={{ scale: 1.02 }}
+                      className={`relative overflow-hidden rounded-xl border-2 transition-all duration-300 ${
+                        project.completion.freelancerMarkedComplete 
+                          ? 'border-emerald-400 bg-gradient-to-br from-emerald-50 to-green-50 shadow-lg shadow-emerald-400/20' 
+                          : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-md'
+                      }`}
+                    >
+                      <div className="p-5">
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <h4 className="font-bold text-gray-800 text-lg mb-1">Freelancer Confirmation</h4>
+                            <p className="text-sm text-gray-600">Work completion verification</p>
+                          </div>
+                          <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${
+                            project.completion.freelancerMarkedComplete 
+                              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' 
+                              : 'bg-gray-100 text-gray-400'
+                          }`}>
+                            {project.completion.freelancerMarkedComplete ? (
+                              <motion.div 
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                transition={{ type: "spring", stiffness: 300 }}
+                              >
+                                ✓
+                              </motion.div>
+                            ) : (
+                              <div className="w-6 h-6 border-2 border-dashed border-gray-300 rounded-full"></div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className={`text-sm font-medium transition-colors duration-300 ${
+                          project.completion.freelancerMarkedComplete ? 'text-emerald-700' : 'text-gray-500'
+                        }`}>
+                          {project.completion.freelancerMarkedComplete ? (
+                            <div className="flex items-center space-x-2">
+                              <span className="w-2 h-2 bg-emerald-400 rounded-full"></span>
+                              <span>Confirmed ✓</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center space-x-2">
+                              <span className="w-2 h-2 bg-gray-300 rounded-full animate-pulse"></span>
+                              <span>Awaiting confirmation</span>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {user?.role === 'freelancer' && 
+                         (project.freelancerId?._id === user._id || project.freelancerId === user._id) && 
+                         !project.completion.freelancerMarkedComplete && (
+                          <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => {
+                              onMarkComplete(project)
+                              onClose()
+                            }}
+                            disabled={loading}
+                            className="mt-4 w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 px-4 rounded-lg font-semibold shadow-lg shadow-green-500/25 hover:shadow-green-500/40 transition-all duration-300"
+                          >
+                            {loading ? (
+                              <div className="flex items-center justify-center space-x-2">
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                <span>Processing...</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-center space-x-2">
+                                <span>⚡</span>
+                                <span>Confirm as Freelancer</span>
+                              </div>
+                            )}
+                          </motion.button>
+                        )}
+                      </div>
+                    </motion.div>
+                  </div>
+
+                  {/* Final Status Banner */}
+                  {project.completion.clientMarkedComplete && project.completion.freelancerMarkedComplete ? (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 0.3 }}
+                      className="relative overflow-hidden bg-gradient-to-r from-emerald-500 via-green-500 to-teal-500 rounded-xl p-6 text-center text-white shadow-xl shadow-emerald-500/30"
+                    >
+                      <div className="relative z-10">
+                        <motion.div 
+                          animate={{ rotate: [0, 10, -10, 0] }}
+                          transition={{ duration: 2, repeat: Infinity }}
+                          className="text-4xl mb-2"
+                        >
+                          🎉
+                        </motion.div>
+                        <h4 className="text-xl font-bold mb-2">Project Completed!</h4>
+                        <p className="text-emerald-100">
+                          Both parties have approved. This project will move to the completed section.
+                        </p>
+                      </div>
+                      <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
+                    </motion.div>
+                  ) : (
+                    <motion.div 
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 text-center"
+                    >
+                      <div className="flex items-center justify-center space-x-2 text-amber-700">
+                        <motion.div 
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                          className="w-5 h-5"
+                        >
+                          ⏳
+                        </motion.div>
+                        <span className="font-semibold">Completion In Progress</span>
+                      </div>
+                      <p className="text-amber-600 text-sm mt-2">
+                        {!project.completion.clientMarkedComplete && !project.completion.freelancerMarkedComplete
+                          ? "Both client and freelancer need to approve completion"
+                          : project.completion.clientMarkedComplete 
+                          ? "Waiting for freelancer confirmation" 
+                          : "Waiting for client approval"
+                        }
+                      </p>
+                    </motion.div>
+                  )}
+                </motion.div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Bid Modal Component
+
+// Bid Modal Component
+function BidModal({ project, onClose, onSuccess }) {
+  // Check if user has already bid on this project
+  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  const existingBid = project.applicants?.find(
+    app => app.freelancerId._id === user.id || app.freelancerId === user.id
+  )
+
+  const [formData, setFormData] = useState({
+    proposedBudget: existingBid?.proposedBudget || '',
+    proposedTimeline: existingBid?.proposedTimeline || '',
+    coverLetter: existingBid?.coverLetter || ''
+  })
+  const [saving, setSaving] = useState(false)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    
+    // Show confirmation if overwriting existing bid
+    if (existingBid) {
+      const confirmOverwrite = window.confirm(
+        'You have already submitted a bid for this project. Do you want to update your existing bid?'
+      )
+      if (!confirmOverwrite) {
+        return
+      }
+    }
+    
+    setSaving(true)
+    
+    try {
+      await api.submitBid(project._id, {
+        bidAmount: Number(formData.proposedBudget),
+        proposal: formData.coverLetter,
+        estimatedDays: Number(formData.proposedTimeline)
+      })
+      onSuccess()
+      onClose()
+    } catch (error) {
+      console.error('Failed to submit bid:', error)
+      alert('Failed to submit bid. Please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">
+                {existingBid ? 'Update Proposal' : 'Submit Proposal'}
+              </h2>
+              {existingBid && (
+                <p className="text-sm text-amber-600 mt-1">
+                  ⚠️ You are updating your existing proposal for this project
+                </p>
+              )}
+            </div>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+              ✕
+            </button>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg p-4 mb-6">
+            <h3 className="font-semibold">{project.title}</h3>
+            <p className="text-gray-600 text-sm mt-1">Budget: ${project.budget?.total?.toLocaleString()}</p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="label">Your Bid (USD)</label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  className="input"
+                  placeholder="5000"
+                  value={formData.proposedBudget}
+                  onChange={(e) => setFormData({ ...formData, proposedBudget: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label">Delivery Time (Days)</label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  className="input"
+                  placeholder="30"
+                  value={formData.proposedTimeline}
+                  onChange={(e) => setFormData({ ...formData, proposedTimeline: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Cover Letter</label>
+              <textarea
+                required
+                rows={6}
+                className="input"
+                placeholder="Explain why you're the best fit for this project..."
+                value={formData.coverLetter}
+                onChange={(e) => setFormData({ ...formData, coverLetter: e.target.value })}
+              />
+            </div>
+
+            <div className="flex justify-end space-x-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="btn btn-outline"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="btn btn-primary"
+              >
+                {saving ? 'Submitting...' : (existingBid ? 'Update Proposal' : 'Submit Proposal')}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function getStatusColor(status) {
+  switch (status) {
+    case 'open': return 'bg-green-100 text-green-800'
+    case 'in_progress': return 'bg-blue-100 text-blue-800'
+    case 'completed': return 'bg-gray-100 text-gray-800'
+    case 'cancelled': return 'bg-red-100 text-red-800'
+    default: return 'bg-gray-100 text-gray-800'
+  }
+}

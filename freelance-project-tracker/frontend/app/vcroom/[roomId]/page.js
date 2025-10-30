@@ -15,19 +15,21 @@ export default function VcroomPage() {
     }, [roomId]);
 
     const initializeMeeting = async () => {
-        const appID = 1639741869;
-        const serverSecret = "08ac7d089ce25f47a1b89e645464b55f";
+        const appID = parseInt(process.env.NEXT_PUBLIC_ZEGO_APP_ID || '1227171486');
+        const serverSecret = process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET || '2bfaecbcd128381aff9ecb12ee9a3859';
         
         // Try to get user info from localStorage or generate random
         let userId = Date.now().toString();
         let userName = `User${Math.floor(Math.random() * 1000)}`;
         
         try {
-            const storedUser = localStorage.getItem('user');
-            if (storedUser) {
-                const user = JSON.parse(storedUser);
-                userId = user._id || user.id || userId;
-                userName = user.name || userName;
+            if (typeof window !== 'undefined') {
+                const storedUser = localStorage.getItem('user');
+                if (storedUser) {
+                    const user = JSON.parse(storedUser);
+                    userId = user._id || user.id || userId;
+                    userName = user.name || userName;
+                }
             }
         } catch (error) {
             console.log('No user found in localStorage, using random name');
@@ -42,13 +44,18 @@ export default function VcroomPage() {
         );
        
         const zp = ZegoUIKitPrebuilt.create(kitToken);
+        
+        // Build URL safely for both client and server
+        const shareUrl = typeof window !== 'undefined' 
+            ? `${window.location.protocol}//${window.location.host}/vcroom/${roomId}`
+            : `https://localhost:3000/vcroom/${roomId}`;
+        
         zp.joinRoom({
             container: meetingRef.current,
             sharedLinks: [
                 {
                     name: 'Personal link',
-                    url: window.location.protocol + '//' + 
-                         window.location.host + '/vcroom/' + roomId,
+                    url: shareUrl,
                 },
             ],
             scenario: {

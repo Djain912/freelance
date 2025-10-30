@@ -520,11 +520,11 @@ export default function Profile({ user }) {
                     </div>
                     {user.role === 'freelancer' && (
                       <div>
-                        <label className="label">Hourly Rate ($)</label>
+                        <label className="label">Hourly Rate (₹)</label>
                         <input
                           type="text"
                           className="input bg-gray-50 cursor-not-allowed"
-                          value={profile.hourlyRate ? `$${profile.hourlyRate}` : 'Not specified'}
+                          value={profile.hourlyRate ? `₹${profile.hourlyRate}` : 'Not specified'}
                           disabled
                           readOnly
                         />

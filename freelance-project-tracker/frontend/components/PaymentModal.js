@@ -336,7 +336,7 @@ export default function PaymentModal({
                   <div className="flex justify-between">
                     <span className="text-gray-400">Amount:</span>
                     <span className="text-white font-medium">
-                      {paymentAmount ? formatCurrency(parseFloat(paymentAmount)) : '$0.00'}
+                      {paymentAmount ? formatCurrency(parseFloat(paymentAmount)) : '₹0.00'}
                     </span>
                   </div>
                   <div className="flex justify-between">

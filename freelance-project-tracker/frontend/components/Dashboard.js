@@ -204,7 +204,7 @@ function ClientDashboard({ user }) {
                   {user.role === 'freelancer' ? 'Total Earnings' : 'Total Spent'}
                 </p>
                 <p className="text-3xl font-bold text-white">
-                  ${stats.earnings.total.toFixed(2)}
+                  ₹{stats.earnings.total.toFixed(2)}
                 </p>
               </div>
             </div>
@@ -290,7 +290,7 @@ function ClientDashboard({ user }) {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-green-400 font-medium">
-                        ${project.budget?.total?.toFixed(2) || '0.00'}
+                        ₹{project.budget?.total?.toFixed(2) || '0.00'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
@@ -364,7 +364,7 @@ function ClientDashboard({ user }) {
                       {transaction.project?.title || 'Deleted Project'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-green-400 font-medium">
-                      ${transaction.amount.toFixed(2)}
+                      ₹{transaction.amount.toFixed(2)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold ${

@@ -207,7 +207,7 @@ export default function ProjectManagement({ user }) {
         `Before marking this project as complete, would you like to pay the freelancer?\n\n` +
         `Project: ${targetProject.title}\n` +
         `Freelancer: ${targetProject.freelancerId?.name || 'Freelancer'}\n` +
-        `Amount: $${bidAmount}\n\n` +
+        `Amount: ₹${bidAmount}\n\n` +
         `Click OK to pay now, or Cancel to mark complete without payment.`
       )
 
@@ -218,15 +218,15 @@ export default function ProjectManagement({ user }) {
           
           if (walletData.balance < bidAmount) {
             const addFunds = confirm(
-              `Insufficient balance. You need $${bidAmount} but only have $${walletData.balance}.\n\n` +
+              `Insufficient balance. You need ₹${bidAmount} but only have ₹${walletData.balance}.\n\n` +
               `Would you like to add funds to your wallet first?`
             )
             
             if (addFunds) {
-              const amountToAdd = prompt(`Enter amount to add (minimum $${bidAmount - walletData.balance}):`)
+              const amountToAdd = prompt(`Enter amount to add (minimum ₹${bidAmount - walletData.balance}):`)
               if (amountToAdd && parseFloat(amountToAdd) > 0) {
                 await api.addFunds(parseFloat(amountToAdd), `Added funds for project: ${targetProject.title}`)
-                alert(`Successfully added $${amountToAdd} to your wallet!`)
+                alert(`Successfully added ₹${amountToAdd} to your wallet!`)
               } else {
                 alert('Payment cancelled. You can still mark the project complete without payment.')
               }
@@ -242,7 +242,7 @@ export default function ProjectManagement({ user }) {
               `Payment for completed project: ${targetProject.title}`
             )
             
-            alert(`✅ Payment of $${bidAmount} sent successfully to ${targetProject.freelancerId?.name || 'Freelancer'}!`)
+            alert(`✅ Payment of ₹${bidAmount} sent successfully to ${targetProject.freelancerId?.name || 'Freelancer'}!`)
           }
         } catch (error) {
           console.error('Payment error:', error)
@@ -1710,7 +1710,7 @@ function CreateProjectForm({ user, onClose, onProjectCreated }) {
     if (!formData.budget.total) {
       errors.push('Budget is required')
     } else if (parseFloat(formData.budget.total) < 1) {
-      errors.push('Budget must be at least $1')
+      errors.push('Budget must be at least ₹1')
     }
     
     if (!formData.timeline.endDate) {
@@ -1887,7 +1887,7 @@ function CreateProjectForm({ user, onClose, onProjectCreated }) {
               />
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              Minimum budget: $1
+              Minimum budget: ₹1
             </p>
           </div>
 

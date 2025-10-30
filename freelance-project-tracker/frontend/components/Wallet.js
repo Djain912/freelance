@@ -106,7 +106,7 @@ export default function Wallet({ user }) {
 
     try {
       setProcessing(true)
-      await api.addFunds(parseFloat(addAmount), description || `Added $${addAmount} to wallet`)
+      await api.addFunds(parseFloat(addAmount), description || `Added ₹${addAmount} to wallet`)
       
       setAddAmount('')
       setDescription('')
@@ -128,7 +128,7 @@ export default function Wallet({ user }) {
 
     try {
       setProcessing(true)
-      await api.withdrawFunds(parseFloat(withdrawAmount), description || `Withdrew $${withdrawAmount} from wallet`)
+      await api.withdrawFunds(parseFloat(withdrawAmount), description || `Withdrew ₹${withdrawAmount} from wallet`)
       
       setWithdrawAmount('')
       setDescription('')
@@ -149,12 +149,12 @@ export default function Wallet({ user }) {
       const bidAmount = project.acceptedBid?.bidAmount || project.budget?.total || 0
       
       if (wallet.balance < bidAmount) {
-        alert(`Insufficient balance. You need $${bidAmount} but only have $${wallet.balance}. Please add funds first.`)
+        alert(`Insufficient balance. You need ₹${bidAmount} but only have ₹${wallet.balance}. Please add funds first.`)
         return
       }
 
       const confirmPayment = confirm(
-        `Pay $${bidAmount} to ${project.freelancerId?.name || 'Freelancer'} for project "${project.title}"?`
+        `Pay ₹${bidAmount} to ${project.freelancerId?.name || 'Freelancer'} for project "${project.title}"?`
       )
       
       if (!confirmPayment) return
@@ -168,7 +168,7 @@ export default function Wallet({ user }) {
       )
       
       await fetchWalletData()
-      alert(`Payment of $${bidAmount} sent successfully to ${project.freelancerId?.name || 'Freelancer'}!`)
+      alert(`Payment of ₹${bidAmount} sent successfully to ${project.freelancerId?.name || 'Freelancer'}!`)
     } catch (error) {
       console.error('Payment error:', error)
       alert('Payment failed. Please try again.')
